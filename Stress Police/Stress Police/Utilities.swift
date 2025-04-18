@@ -25,7 +25,7 @@ func timeLeftString(for deadline: Date) -> String {
 // MARK: - Format Work Block Duration
 
 func formatDuration(_ duration: TimeInterval) -> String {
-    let totalMinutes = Int(duration / 60)
+    let totalMinutes = Int(round(duration / 60))
     let hours = totalMinutes / 60
     let minutes = totalMinutes % 60
 
@@ -40,13 +40,12 @@ func formatDuration(_ duration: TimeInterval) -> String {
 
 func recommendWorkSchedule(forTaskTitle title: String, deadline: Date, priority: Task.Priority, workHours: (start: Int, end: Int) = (9, 19)) -> [Task.WorkBlock] {
     let calendar = Calendar.current
-    var current = max(Date(), calendar.date(byAdding: .minute, value: 10, to: Date())!) // give 10 min prep time
+    var current = Date().addingTimeInterval(600) // 10 min prep time
 
-    let workingHours = workHours // 9 AM to 7 PM by default
     let timeUntilDeadline = deadline.timeIntervalSince(current)
     guard timeUntilDeadline > 0 else { return [] }
 
-    let (blockCount, workPerBlock): (Int, TimeInterval) = {
+    let (blockCount, preferredWorkPerBlock): (Int, TimeInterval) = {
         switch priority {
         case .high: return (6, 45 * 60)
         case .medium: return (4, 40 * 60)
@@ -58,8 +57,8 @@ func recommendWorkSchedule(forTaskTitle title: String, deadline: Date, priority:
     var remainingBlocks = blockCount
 
     while remainingBlocks > 0 && current < deadline {
-        guard let workDayStart = calendar.date(bySettingHour: workingHours.start, minute: 0, second: 0, of: current),
-              let workDayEnd = calendar.date(bySettingHour: workingHours.end, minute: 0, second: 0, of: current) else {
+        guard let workDayStart = calendar.date(bySettingHour: workHours.start, minute: 0, second: 0, of: current),
+              let workDayEnd = calendar.date(bySettingHour: workHours.end, minute: 0, second: 0, of: current) else {
             break
         }
 
@@ -70,10 +69,18 @@ func recommendWorkSchedule(forTaskTitle title: String, deadline: Date, priority:
             continue
         }
 
-        let remainingToday = workDayEnd.timeIntervalSince(current)
-        if remainingToday >= workPerBlock {
-            schedule.append(Task.WorkBlock(startTime: current, duration: workPerBlock))
-            current = current.addingTimeInterval(workPerBlock + 20 * 60) // 20-min break
+        let maxPossibleBlock = min(preferredWorkPerBlock, deadline.timeIntervalSince(current), workDayEnd.timeIntervalSince(current))
+
+        if maxPossibleBlock >= 10 * 60 { // minimum 10 minutes
+            let startHour = Double(calendar.component(.hour, from: current)) +
+                            Double(calendar.component(.minute, from: current)) / 60.0
+
+            let endTime = current.addingTimeInterval(maxPossibleBlock)
+            let endHour = Double(calendar.component(.hour, from: endTime)) +
+                          Double(calendar.component(.minute, from: endTime)) / 60.0
+
+            schedule.append(Task.WorkBlock(startHour: startHour, endHour: endHour, from: .defaultPlan, label: nil))
+            current = endTime.addingTimeInterval(20 * 60) // 20-min break
             remainingBlocks -= 1
         } else {
             current = calendar.date(byAdding: .day, value: 1, to: workDayStart)!
@@ -82,3 +89,4 @@ func recommendWorkSchedule(forTaskTitle title: String, deadline: Date, priority:
 
     return schedule
 }
+

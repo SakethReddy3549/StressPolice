@@ -74,6 +74,7 @@ struct SignupView: View {
         UserDefaults.standard.set(email, forKey: "registeredEmail")
         UserDefaults.standard.set(password, forKey: "registeredPassword")
         UserDefaults.standard.set(false, forKey: "hasSetupProfile") // will force ProfileView after login
+        UserDefaults.standard.set(true, forKey: "isFirstLogin")     // ensure tutorial shows on first login
         showLogin = true
     }
 }

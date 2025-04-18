@@ -34,8 +34,9 @@ struct RootView: View {
         ZStack {
             backgroundColor.ignoresSafeArea()
 
-            if isLoggedIn && hasSetupProfile {
-                // ✅ Load Home (already logged in and profile is set)
+            if isLoggedIn && hasSetupProfile && isFirstLogin {
+                TutorialView(isFirstLogin: $isFirstLogin)
+            } else if isLoggedIn && hasSetupProfile {
                 ContentView(
                     isDarkMode: $isDarkMode,
                     isLoggedIn: $isLoggedIn,
@@ -47,7 +48,6 @@ struct RootView: View {
                     }
                 )
             } else if isLoggedIn && !hasSetupProfile {
-                // 🔄 Show Profile for first-time login
                 ProfileView(
                     name: $tempName,
                     bio: $tempBio,
@@ -63,9 +63,10 @@ struct RootView: View {
                         UserDefaults.standard.set(start, forKey: "workStartHour")
                         UserDefaults.standard.set(end, forKey: "workEndHour")
                         UserDefaults.standard.set(true, forKey: "hasSetupProfile")
-                        UserDefaults.standard.set(false, forKey: "isFirstLogin")
+                        UserDefaults.standard.set(true, forKey: "isFirstLogin") // ✅ tutorial must follow this
                         isLoggedIn = true
-                        hasSetupProfile = true // Immediately update state
+                        hasSetupProfile = true
+                        isFirstLogin = true // ✅ trigger tutorial
                     }
                 )
             } else if showLogin {
