@@ -20,15 +20,7 @@ struct OpenAIResponse: Codable {
 }
 
 class OpenAIService {
-    private var apiKey: String {
-        guard let url = Bundle.main.url(forResource: "Secrets", withExtension: "plist"),
-              let data = try? Data(contentsOf: url),
-              let plist = try? PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any],
-              let key = plist["OPENAI_API_KEY"] as? String else {
-            return ""
-        }
-        return key
-    }
+    private let backendURL = URL(string: "https://stresspolice-backend.onrender.com")! // backend URL
 
     func fetchSmartSchedule(
         tasks: [Task],
@@ -61,35 +53,17 @@ class OpenAIService {
 
         let userPrompt = generatePrompt(from: tasks, workStart: workStart, workEnd: workEnd, objective: objective)
 
-        let request = OpenAIRequest(
-            model: "gpt-3.5-turbo",
-            messages: [
-                OpenAIMessage(role: "system", content: systemPrompt),
-                OpenAIMessage(role: "user", content: userPrompt)
-            ],
-            temperature: 0.7
-        )
+        let payload: [String: String] = [
+            "systemPrompt": systemPrompt,
+            "userPrompt": userPrompt
+        ]
 
-        guard let url = URL(string: "https://api.openai.com/v1/chat/completions") else {
-            print("Invalid URL")
-            completion(nil)
-            return
-        }
+        var request = URLRequest(url: backendURL)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try? JSONSerialization.data(withJSONObject: payload, options: [])
 
-        var urlRequest = URLRequest(url: url)
-        urlRequest.httpMethod = "POST"
-        urlRequest.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-        urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
-
-        do {
-            urlRequest.httpBody = try JSONEncoder().encode(request)
-        } catch {
-            print("Failed to encode request: \(error)")
-            completion(nil)
-            return
-        }
-
-        URLSession.shared.dataTask(with: urlRequest) { data, response, error in
+        URLSession.shared.dataTask(with: request) { data, response, error in
             guard let data = data else {
                 print("No data: \(error?.localizedDescription ?? "Unknown error")")
                 completion(nil)
@@ -99,19 +73,13 @@ class OpenAIService {
             do {
                 print("Raw Response:")
                 print(String(data: data, encoding: .utf8) ?? "Failed to decode string")
-                let decoded = try JSONDecoder().decode(OpenAIResponse.self, from: data)
-                if let content = decoded.choices.first?.message.content,
-                   let jsonData = content.data(using: .utf8) {
+                if let jsonData = String(data: data, encoding: .utf8)?.data(using: .utf8) {
                     let blocks = try? JSONDecoder().decode([Task.WorkBlock].self, from: jsonData)
                     completion(blocks)
                 } else {
-                    print("No content or invalid JSON format")
+                    print("Invalid response format")
                     completion(nil)
                 }
-            } catch {
-                print("Decoding failed: \(error)")
-                print(String(data: data, encoding: .utf8) ?? "")
-                completion(nil)
             }
         }.resume()
     }
